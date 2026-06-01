@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"sync"
 
-	"my-vpn/internal/constants"
-	"my-vpn/internal/models"
+	"Simple-VPN/internal/constants"
+	"Simple-VPN/internal/models"
 )
 
 type ClientSession struct {

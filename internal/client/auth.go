@@ -5,9 +5,9 @@ import (
 	"log"
 	"os/exec"
 
-	"my-vpn/internal/models"
-
 	"github.com/songgao/water"
+
+	"Simple-VPN/internal/models"
 )
 
 func (c *vpnClient) handleAuthChallenge(packet models.Packet) {
@@ -64,6 +64,16 @@ func (c *vpnClient) handleAuthSuccess(packet models.Packet) {
 	exec.Command(
 		"ip", "addr", "add", "10.0.0.1/24", "dev", ifName,
 	).Run()
+
+	exec.Command(
+		"ip", "link", "set", "dev", ifName, "up",
+	).Run()
+
+	log.Printf("TUN interface %s configured and up\n", ifName)
+
+	exec.Command(
+		"ip", "route", "add", "10.10.0.0/24", "dev", ifName,
+	)
 }
 
 func (c *vpnClient) handleAuthFailure(packet models.Packet) {

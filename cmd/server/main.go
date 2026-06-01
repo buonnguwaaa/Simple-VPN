@@ -1,7 +1,7 @@
 package main
 
 import (
-	"my-vpn/internal/server"
+	"Simple-VPN/internal/server"
 )
 
 func main() {
