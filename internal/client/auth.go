@@ -73,7 +73,8 @@ func (c *vpnClient) handleAuthSuccess(packet models.Packet) {
 
 	exec.Command(
 		"ip", "route", "add", "10.10.0.0/24", "dev", ifName,
-	)
+	).Run()
+	c.tun = tun
 }
 
 func (c *vpnClient) handleAuthFailure(packet models.Packet) {
@@ -96,4 +97,31 @@ func (c *vpnClient) handleHeartbeat() {
 
 func (c *vpnClient) handleDataPacket(packet models.Packet) {
 	log.Println("Received data packet")
+}
+
+func (c *vpnClient) tunToUDP() {
+	if c.tun == nil {
+		log.Println("TUN interface not set up yet")
+		return
+	}
+
+	buffer := make([]byte, 4096)
+
+	for {
+		n, err := c.tun.Read(buffer)
+		if err != nil {
+			log.Println("failed to read from TUN interface:", err)
+			return
+		}
+
+		packet := models.Packet{
+			Type:    models.DataPacket,
+			Payload: buffer[:n],
+		}
+
+		if err := sendPacket(c.conn, packet); err != nil {
+			log.Println("failed to send data packet:", err)
+			return
+		}
+	}
 }

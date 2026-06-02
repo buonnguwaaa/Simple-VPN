@@ -8,12 +8,15 @@ import (
 	"log"
 	"net"
 
+	"github.com/songgao/water"
+
 	"Simple-VPN/internal/constants"
 	"Simple-VPN/internal/models"
 )
 
 type vpnClient struct {
 	conn *net.UDPConn
+	tun  *water.Interface
 }
 
 type VPNClient interface {
@@ -37,6 +40,7 @@ func NewVPNClient(port string) *vpnClient {
 
 	return &vpnClient{
 		conn: conn,
+		tun:  nil,
 	}
 }
 
