@@ -1,25 +1,4 @@
-package models
-
-import (
-	"encoding/json"
-)
-
-type MessageType int
-
-const (
-	AuthRequest MessageType = iota + 1
-	AuthChallenge
-	AuthResponse
-	AuthSuccess
-	AuthFailure
-	DataPacket
-	Heartbeat
-)
-
-type Packet struct {
-	Type    MessageType     `json:"type"`
-	Payload json.RawMessage `json:"payload"`
-}
+package protocol
 
 // Uncomment this if you want each client to have a unique secret key for HMAC authentication
 //

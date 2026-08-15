@@ -1,10 +1,14 @@
 package main
 
 import (
-	"Simple-VPN/internal/client"
+	"Simple-VPN/internal/app/client"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	client := client.NewVPNClient("51820")
+	_ = godotenv.Load(".env")
+	client := client.NewVPNClient(os.Getenv("PORT"))
 	client.Start()
 }

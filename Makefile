@@ -5,3 +5,8 @@ client:
 server:
 	echo "Starting server..."
 	go run cmd/server/main.go
+
+format:
+	echo "Formatting code..."
+	gofmt -w -s .
+	goimports -w .
