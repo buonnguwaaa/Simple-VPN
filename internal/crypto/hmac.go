@@ -9,5 +9,6 @@ import (
 func ComputeHMAC(message string, secret string) string {
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write([]byte(message))
+
 	return hex.EncodeToString(h.Sum(nil))
 }

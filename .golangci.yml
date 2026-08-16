@@ -1,0 +1,91 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - nilerr
+    - noctx
+    - errorlint
+    - unconvert
+    - wastedassign
+    - usestdlibvars
+    - misspell
+    - sqlclosecheck
+    - rowserrcheck
+    - contextcheck
+    - nilnil
+    - nolintlint
+    - gosec
+    - exhaustive
+    - durationcheck
+    - makezero
+    - copyloopvar
+    - bidichk
+    - containedctx
+    - dupl
+    - goheader
+    - nestif
+    - paralleltest
+    - prealloc
+    - wsl_v5
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable:
+        - nilness
+      disable:
+        - inline
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -QF1008
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
+    paths:
+      - proto/fiserv
+      - mocks
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - bodyclose
+          - noctx
+      - path: ^server/
+        linters:
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    goimports:
+      local-prefixes:
+        - bitbucket.org/hasaki-tech/payment
+  exclusions:
+    generated: lax
+    paths:
+      - proto/fiserv
+      - mocks
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

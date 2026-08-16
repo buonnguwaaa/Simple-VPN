@@ -16,13 +16,15 @@ type vpnClient struct {
 }
 
 type VPNClient interface {
-	Start()
+	Run() error
+	Stop() error
 }
 
 func NewVPNClient(port string) *vpnClient {
 	if port == "" {
 		port = "51820"
 	}
+
 	addr, err := net.ResolveUDPAddr("udp", "localhost:"+port)
 	if err != nil {
 		log.Fatal(err)
@@ -40,9 +42,9 @@ func NewVPNClient(port string) *vpnClient {
 	}
 }
 
-func (c *vpnClient) Start() {
+func (c *vpnClient) Run() error {
 	if _, err := c.handshaker.Handshake(); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	c.setupTUN()
@@ -52,7 +54,7 @@ func (c *vpnClient) Start() {
 	for {
 		n, err := c.conn.Read(buffer)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		var packet protocol.Packet
@@ -63,7 +65,6 @@ func (c *vpnClient) Start() {
 		}
 
 		switch packet.Type {
-
 		case protocol.Heartbeat:
 			c.handleHeartbeat()
 
@@ -76,15 +77,35 @@ func (c *vpnClient) Start() {
 	}
 }
 
-func (c *vpnClient) setupTUN() {
-	tun := tunnel.Open("10.0.0.1/24", "10.10.0.0/24")
-	if tun == nil {
-		log.Fatal("failed to open TUN interface")
+func (c *vpnClient) Stop() error {
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil {
+			return err
+		}
+	}
+
+	if c.tunnel != nil {
+		if err := c.tunnel.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *vpnClient) setupTUN() error {
+	tun, err := tunnel.Open("10.0.0.1/24", "10.10.0.0/24")
+	if err != nil {
+		return err
 	}
 
 	c.tunnel = tun
 
-	go c.tunToUDP()
+	go func() {
+		c.tunToUDP()
+	}()
+
+	return nil
 }
 
 func (c *vpnClient) handleHeartbeat() {

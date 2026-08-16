@@ -14,15 +14,15 @@ type tunnel struct {
 type Tunnel interface {
 	Read(buffer []byte) (int, error)
 	Write(buffer []byte) (int, error)
-	Close()
+	Close() error
 }
 
-func Open(addr, route string) *tunnel {
+func Open(addr, route string) (*tunnel, error) {
 	tun, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	ifName := tun.Name()
@@ -36,7 +36,7 @@ func Open(addr, route string) *tunnel {
 	if err := exec.Command(
 		"ip", "link", "set", "dev", ifName, "up",
 	).Run(); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	log.Printf("TUN interface %s configured and up\n", ifName)
@@ -45,14 +45,14 @@ func Open(addr, route string) *tunnel {
 	if err := exec.Command(
 		"ip", "route", "add", route, "dev", ifName,
 	).Run(); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	log.Printf("TUN interface %s configured and up\n", ifName)
 
 	return &tunnel{
 		tun: tun,
-	}
+	}, nil
 }
 
 func (t *tunnel) Read(buffer []byte) (int, error) {
@@ -63,11 +63,12 @@ func (t *tunnel) Write(buffer []byte) (int, error) {
 	return t.tun.Write(buffer)
 }
 
-func (t *tunnel) Close() {
-	err := t.tun.Close()
-	if err != nil {
-		log.Fatal(err)
+func (t *tunnel) Close() error {
+	if err := t.tun.Close(); err != nil {
+		return err
 	}
 
 	log.Printf("TUN interface %s closed\n", t.tun.Name())
+
+	return nil
 }

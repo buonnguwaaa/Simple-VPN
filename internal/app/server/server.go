@@ -22,7 +22,8 @@ type vpnServer struct {
 }
 
 type VPNServer interface {
-	Start()
+	Run() error
+	Stop() error
 }
 
 func NewVPNServer(port string) *vpnServer {
@@ -45,14 +46,13 @@ func NewVPNServer(port string) *vpnServer {
 	}
 }
 
-func (s *vpnServer) Start() {
+func (s *vpnServer) Run() error {
 	buffer := make([]byte, 4096)
 
 	for {
 		n, remoteAddr, err := s.conn.ReadFromUDP(buffer)
 		if err != nil {
-			log.Printf("Error reading from UDP: %v", err)
-			continue
+			return err
 		}
 
 		var packet protocol.Packet
@@ -63,13 +63,13 @@ func (s *vpnServer) Start() {
 		}
 
 		switch packet.Type {
-
 		case protocol.AuthRequest, protocol.AuthResponse:
 			session, err := s.handshaker.Handshake(packet, remoteAddr)
 			if err != nil {
 				log.Println(err)
 				continue
 			}
+
 			if session == nil {
 				continue
 			}
@@ -88,6 +88,20 @@ func (s *vpnServer) Start() {
 			log.Printf("unknown packet type: %d\n", packet.Type)
 		}
 	}
+}
+
+func (s *vpnServer) Stop() error {
+	if s.conn != nil {
+		if err := s.conn.Close(); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	s.sessions = make(map[int]*ClientSession)
+	s.mu.Unlock()
+
+	return nil
 }
 
 func (s *vpnServer) handleHeartbeat(addr *net.UDPAddr) {

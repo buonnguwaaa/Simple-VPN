@@ -48,7 +48,6 @@ func (h *clientHandshaker) Handshake() (int, error) {
 		}
 
 		switch packet.Type {
-
 		case protocol.AuthChallenge:
 			if err := h.handleChallenge(packet); err != nil {
 				log.Println(err)
@@ -82,6 +81,7 @@ func (h *clientHandshaker) authRequest() error {
 	}
 
 	log.Println("Sent auth request")
+
 	return nil
 }
 
@@ -111,6 +111,7 @@ func (h *clientHandshaker) handleChallenge(packet protocol.Packet) error {
 	}
 
 	log.Println("Sent auth response")
+
 	return nil
 }
 

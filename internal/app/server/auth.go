@@ -37,7 +37,6 @@ type ServerHandshaker interface {
 
 func (h *serverHandshaker) Handshake(packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error) {
 	switch packet.Type {
-
 	case protocol.AuthRequest:
 		return nil, h.handleRequest(packet, addr)
 
@@ -84,6 +83,7 @@ func (h *serverHandshaker) handleRequest(packet protocol.Packet, addr *net.UDPAd
 	}
 
 	log.Printf("Sent auth challenge to %s", addr.String())
+
 	return nil
 }
 
@@ -95,6 +95,7 @@ func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPA
 	}
 
 	h.mu.Lock()
+
 	nonce, ok := h.pendingChallenges[addr.String()]
 	if ok {
 		delete(h.pendingChallenges, addr.String())
@@ -105,6 +106,7 @@ func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPA
 		if err := h.handleFailure(addr, "no pending challenge"); err != nil {
 			return nil, err
 		}
+
 		return nil, fmt.Errorf("no pending challenge for %s", addr.String())
 	}
 
@@ -113,6 +115,7 @@ func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPA
 		if err := h.handleFailure(addr, "invalid hmac"); err != nil {
 			return nil, err
 		}
+
 		return nil, fmt.Errorf("invalid hmac from %s", addr.String())
 	}
 
@@ -170,5 +173,6 @@ func randomNonce() (string, error) {
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	return hex.EncodeToString(bytes), nil
 }
