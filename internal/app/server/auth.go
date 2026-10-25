@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"encoding/hex"
@@ -32,23 +33,31 @@ func NewServerHandshaker(conn *net.UDPConn, secretKey string) ServerHandshaker {
 }
 
 type ServerHandshaker interface {
-	Handshake(packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error)
+	Handshake(ctx context.Context, packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error)
 }
 
-func (h *serverHandshaker) Handshake(packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error) {
-	switch packet.Type {
+func (h *serverHandshaker) Handshake(ctx context.Context, packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	switch packet.Type { //nolint:exhaustive
 	case protocol.AuthRequest:
-		return nil, h.handleRequest(packet, addr)
+		return nil, h.handleRequest(ctx, packet, addr)
 
 	case protocol.AuthResponse:
-		return h.handleResponse(packet, addr)
+		return h.handleResponse(ctx, packet, addr)
 
 	default:
 		return nil, fmt.Errorf("unexpected packet type during handshake: %d", packet.Type)
 	}
 }
 
-func (h *serverHandshaker) handleRequest(packet protocol.Packet, addr *net.UDPAddr) error {
+func (h *serverHandshaker) handleRequest(ctx context.Context, packet protocol.Packet, addr *net.UDPAddr) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	var payload protocol.AuthRequestPayload
 
 	if err := json.Unmarshal(packet.Payload, &payload); err != nil {
@@ -87,7 +96,11 @@ func (h *serverHandshaker) handleRequest(packet protocol.Packet, addr *net.UDPAd
 	return nil
 }
 
-func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error) {
+func (h *serverHandshaker) handleResponse(ctx context.Context, packet protocol.Packet, addr *net.UDPAddr) (*ClientSession, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	var payload protocol.AuthResponsePayload
 
 	if err := json.Unmarshal(packet.Payload, &payload); err != nil {
@@ -103,7 +116,7 @@ func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPA
 	h.mu.Unlock()
 
 	if !ok {
-		if err := h.handleFailure(addr, "no pending challenge"); err != nil {
+		if err := h.handleFailure(ctx, addr, "no pending challenge"); err != nil {
 			return nil, err
 		}
 
@@ -112,17 +125,21 @@ func (h *serverHandshaker) handleResponse(packet protocol.Packet, addr *net.UDPA
 
 	expectedHMAC := crypto.ComputeHMAC(nonce, h.secretKey)
 	if !hmac.Equal([]byte(expectedHMAC), []byte(payload.HMAC)) {
-		if err := h.handleFailure(addr, "invalid hmac"); err != nil {
+		if err := h.handleFailure(ctx, addr, "invalid hmac"); err != nil {
 			return nil, err
 		}
 
 		return nil, fmt.Errorf("invalid hmac from %s", addr.String())
 	}
 
-	return h.handleSuccess(addr)
+	return h.handleSuccess(ctx, addr)
 }
 
-func (h *serverHandshaker) handleSuccess(addr *net.UDPAddr) (*ClientSession, error) {
+func (h *serverHandshaker) handleSuccess(ctx context.Context, addr *net.UDPAddr) (*ClientSession, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	h.mu.Lock()
 	h.nextSessionID++
 	sessionID := h.nextSessionID
@@ -150,7 +167,11 @@ func (h *serverHandshaker) handleSuccess(addr *net.UDPAddr) (*ClientSession, err
 	}, nil
 }
 
-func (h *serverHandshaker) handleFailure(addr *net.UDPAddr, message string) error {
+func (h *serverHandshaker) handleFailure(ctx context.Context, addr *net.UDPAddr, message string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	failurePayload, err := json.Marshal(protocol.AuthFailurePayload{
 		Error: message,
 	})

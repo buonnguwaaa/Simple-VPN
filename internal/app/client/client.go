@@ -1,8 +1,10 @@
 package client
 
 import (
+	"context"
 	"log"
 	"net"
+	"time"
 
 	"Simple-VPN/internal/constants"
 	"Simple-VPN/internal/protocol"
@@ -16,7 +18,7 @@ type vpnClient struct {
 }
 
 type VPNClient interface {
-	Run() error
+	Run(context.Context) error
 	Stop() error
 }
 
@@ -42,14 +44,19 @@ func NewVPNClient(port string) *vpnClient {
 	}
 }
 
-func (c *vpnClient) Run() error {
-	if _, err := c.handshaker.Handshake(); err != nil {
+func (c *vpnClient) Run(ctx context.Context) error {
+	handshakeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if _, err := c.handshaker.Handshake(handshakeCtx); err != nil {
 		return err
 	}
 
-	c.setupTUN()
+	if err := c.setupClientTUN(ctx); err != nil {
+		return err
+	}
 
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, 4096) // This is receive buffer
 
 	for {
 		n, err := c.conn.Read(buffer)
@@ -64,7 +71,7 @@ func (c *vpnClient) Run() error {
 			continue
 		}
 
-		switch packet.Type {
+		switch packet.Type { //nolint:exhaustive
 		case protocol.Heartbeat:
 			c.handleHeartbeat()
 
@@ -93,8 +100,17 @@ func (c *vpnClient) Stop() error {
 	return nil
 }
 
-func (c *vpnClient) setupTUN() error {
-	tun, err := tunnel.Open("10.0.0.1/24", "10.10.0.0/24")
+// Request: /1 routes send local app traffic into this TUN (full tunnel).
+// ProtectHost keeps the VPN UDP envelope on the physical NIC / loopback.
+// Response: dest 10.0.0.1 is local on this TUN; handleDataPacket tun.Write
+// delivers replies to the app. No ip_forward — TUN never forwards to eth0.
+func (c *vpnClient) setupClientTUN(ctx context.Context) error {
+	if err := tunnel.ProtectHost(ctx, udpRemoteIP(c.conn)); err != nil {
+		return err
+	}
+
+	// Request: two /1 routes beat the existing default (0.0.0.0/0) without replacing it.
+	tun, err := tunnel.Open(ctx, "10.0.0.1/24", "0.0.0.0/1", "128.0.0.0/1")
 	if err != nil {
 		return err
 	}
@@ -112,10 +128,17 @@ func (c *vpnClient) handleHeartbeat() {
 	log.Println("Received heartbeat")
 }
 
+// Response: UDP DataPacket from the server → tun.Write. Kernel delivers
+// dest 10.0.0.1 to the local app.
 func (c *vpnClient) handleDataPacket(packet protocol.Packet) {
-	log.Println("Received data packet")
+	if _, err := c.tunnel.Write(packet.Payload); err != nil {
+		log.Println("failed to write packet to TUN: ", err)
+	}
 }
 
+// Request: read inner packets the kernel sent into this TUN (app traffic
+// matching the /1 routes) and UDP-send them to the server. Not forwarded
+// to eth0 — encapsulation happens in this process.
 func (c *vpnClient) tunToUDP() {
 	if c.tunnel == nil {
 		log.Println("TUN interface not set up yet")
@@ -152,4 +175,17 @@ func sendPacket(conn *net.UDPConn, packet protocol.Packet) error {
 	_, err = conn.Write(data)
 
 	return err
+}
+
+func udpRemoteIP(conn *net.UDPConn) net.IP {
+	if conn == nil {
+		return nil
+	}
+
+	addr, ok := conn.RemoteAddr().(*net.UDPAddr)
+	if !ok {
+		return nil
+	}
+
+	return addr.IP
 }

@@ -1,10 +1,12 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	"Simple-VPN/internal/constants"
 	"Simple-VPN/internal/crypto"
@@ -24,12 +26,31 @@ func NewClientHandshaker(conn *net.UDPConn, secretKey string) ClientHandshaker {
 }
 
 type ClientHandshaker interface {
-	Handshake() (sessionID int, err error)
+	Handshake(context.Context) (sessionID int, err error)
 }
 
-func (h *clientHandshaker) Handshake() (int, error) {
-	if err := h.authRequest(); err != nil {
+func (h *clientHandshaker) Handshake(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
 		return 0, err
+	}
+
+	if err := h.authRequest(ctx); err != nil {
+		return 0, err
+	}
+
+	stop := context.AfterFunc(ctx, func() {
+		_ = h.conn.SetReadDeadline(time.Now())
+	})
+	defer func() {
+		stop()
+
+		_ = h.conn.SetReadDeadline(time.Time{})
+	}()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := h.conn.SetReadDeadline(deadline); err != nil {
+			return 0, err
+		}
 	}
 
 	buffer := make([]byte, 4096)
@@ -37,6 +58,10 @@ func (h *clientHandshaker) Handshake() (int, error) {
 	for {
 		n, err := h.conn.Read(buffer)
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return 0, ctxErr
+			}
+
 			return 0, err
 		}
 
@@ -47,9 +72,9 @@ func (h *clientHandshaker) Handshake() (int, error) {
 			continue
 		}
 
-		switch packet.Type {
+		switch packet.Type { //nolint:exhaustive
 		case protocol.AuthChallenge:
-			if err := h.handleChallenge(packet); err != nil {
+			if err := h.handleChallenge(ctx, packet); err != nil {
 				log.Println(err)
 			}
 
@@ -65,7 +90,11 @@ func (h *clientHandshaker) Handshake() (int, error) {
 	}
 }
 
-func (h *clientHandshaker) authRequest() error {
+func (h *clientHandshaker) authRequest(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(protocol.AuthRequestPayload{
 		Message: constants.HELLO_MESSAGE,
 	})
@@ -85,7 +114,11 @@ func (h *clientHandshaker) authRequest() error {
 	return nil
 }
 
-func (h *clientHandshaker) handleChallenge(packet protocol.Packet) error {
+func (h *clientHandshaker) handleChallenge(ctx context.Context, packet protocol.Packet) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	var payload protocol.AuthChallengePayload
 
 	if err := json.Unmarshal(packet.Payload, &payload); err != nil {

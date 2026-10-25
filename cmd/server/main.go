@@ -23,7 +23,7 @@ func main() {
 	errCh := make(chan error, 1)
 
 	go func() {
-		errCh <- s.Run()
+		errCh <- s.Run(ctx)
 	}()
 
 	select {
